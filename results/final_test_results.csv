@@ -1,0 +1,3 @@
+setting,alerts,tp,fp,precision,recall,alerts_per_day,insiders_caught,n_insiders,benign_flagged,n_benign,avg_delay_days
+warning only,249,11,238,0.04417670682730924,0.028350515463917526,1.6490066225165563,8,20,36,381,4.625
+persist K=2 M=1,180,6,174,0.03333333333333333,0.015463917525773196,1.1920529801324504,5,20,20,381,13.8

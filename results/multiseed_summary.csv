@@ -1,0 +1,3 @@
+rule,precision_mean,precision_std,recall_mean,recall_std,f1_mean,f1_std,fpr_mean,fpr_std,alerts_per_day_mean,alerts_per_day_std,insiders_caught_mean,insiders_caught_std,benign_flagged_mean,benign_flagged_std
+warning only,0.0356,0.0059,0.0237,0.0034,0.0284,0.0043,0.0063,0.0003,1.7192,0.061,7.6,0.8944,41.6,5.8566
+persist K=2 M=1,0.0249,0.0061,0.0113,0.0029,0.0156,0.004,0.0043,0.0002,1.1682,0.0508,4.0,1.0,21.0,2.6458

@@ -7,7 +7,7 @@ FEATURES_PARQUET = PROCESSED / "features.parquet"
 RAW_FEATURES = [
     "n_events", "n_logon", "n_connect", "n_filecopy", "n_risky_ext",
     "n_after_hours", "n_after_connect", "n_after_file", "n_pcs",
-    "first_hour", "last_hour",
+    "first_hour", "last_hour", "n_weekend_events", "span_hours",
 ]
 
 
@@ -38,11 +38,13 @@ def main():
         first_hour=("hour", "min"),
         last_hour=("hour", "max"),
         weekend=("weekend", "max"),
+        n_weekend_events=("weekend", "sum"),
         label=("label", "max"),
         scenario=("scenario", "max"),
     ).reset_index()
 
     daily = daily.sort_values(["user", "date"]).reset_index(drop=True)
+    daily["span_hours"] = daily["last_hour"] - daily["first_hour"]
 
     # Per-user profile: each user's own past mean/std (shifted by 1 day, so no leakage).
     # The first 14 active days of a user are a warm-up and get z = 0.

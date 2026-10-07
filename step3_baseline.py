@@ -1,38 +1,49 @@
-import json
-from sklearn.ensemble import IsolationForest
-from common import *
+import numpy as np
+import pandas as pd
+from config import *
+
+FEATURES_PARQUET = PROCESSED / "features.parquet"
+
+RAW_FEATURES = [
+    "n_events", "n_logon", "n_connect", "n_filecopy", "n_risky_ext",
+    "n_after_hours", "n_after_connect", "n_after_file", "n_pcs",
+    "first_hour", "last_hour", "n_weekend_events", "span_hours",
+    "n_new_pc", "n_new_ext",
+]
 
 
 def main():
-    train, test, cutoff = load_split()
-    print("Split date:", pd.Timestamp(cutoff).date())
-    print("Train rows:", len(train), "| malicious:", int(train["label"].sum()))
-    print("Test rows:", len(test), "| malicious:", int(test["label"].sum()),
-          "| malicious users in test:", test.loc[test["label"] == 1, "user"].nunique())
+    ev = pd.read_parquet(EVENTS_PARQUET)
+    ts = ev["timestamp"]
+    ev["date"] = ts.dt.normalize()
+    ev["hour"] = ts.dt.hour + ts.dt.minute / 60.0
+    ev["after_hours"] = ((ev["hour"] < 7) | (ev["hour"] >= 19)).astype(int)
+    ev["weekend"] = (ts.dt.dayofweek >= 5).astype(int)
+    ev["is_logon"] = ((ev["source"] == "logon") & (ev["activity"] == "Logon")).astype(int)
+    ev["is_connect"] = ((ev["source"] == "device") & (ev["activity"] == "Connect")).astype(int)
+    ev["is_filecopy"] = (ev["source"] == "file").astype(int)
+    ev["is_risky_ext"] = ((ev["source"] == "file") & ev["ext"].isin(["exe", "zip"])).astype(int)
+    ev["ah_connect"] = ev["is_connect"] * ev["after_hours"]
+    ev["ah_file"] = ev["is_filecopy"] * ev["after_hours"]
 
-    model = IsolationForest(n_estimators=200, random_state=SEED, n_jobs=-1)
-    model.fit(train[RAW_COLS])
+    daily = ev.groupby(["user", "date"]).agg(
+        n_events=("timestamp", "size"),
+        n_logon=("is_logon", "sum"),
+        n_connect=("is_connect", "sum"),
+        n_filecopy=("is_filecopy", "sum"),
+        n_risky_ext=("is_risky_ext", "sum"),
+        n_after_hours=("after_hours", "sum"),
+        n_after_connect=("ah_connect", "sum"),
+        n_after_file=("ah_file", "sum"),
+        n_pcs=("pc", "nunique"),
+        first_hour=("hour", "min"),
+        last_hour=("hour", "max"),
+        weekend=("weekend", "max"),
+        n_weekend_events=("weekend", "sum"),
+        label=("label", "max"),
+        scenario=("scenario", "max"),
+    ).reset_index()
 
-    train_score = -model.score_samples(train[RAW_COLS])
-    test_score = -model.score_samples(test[RAW_COLS])
-
-    threshold = np.percentile(train_score, 99)
-    pred = (test_score >= threshold).astype(int)
-
-    m = evaluate(test["label"].values, pred, test_score)
-    m["alerts_per_day"] = float(pred.sum() / test["date"].nunique())
-
-    print("")
-    print("BASELINE: global Isolation Forest on raw counts")
-    for k, v in m.items():
-        print(k, ":", round(v, 4) if isinstance(v, float) else v)
-
-    test["baseline_score"] = test_score
-    test["baseline_pred"] = pred
-    test.to_parquet(RESULTS / "baseline_scores.parquet", index=False)
-    with open(RESULTS / "baseline_metrics.json", "w") as f:
-        json.dump(m, f, indent=2)
-    print("Saved results in:", RESULTS)
-
-
-main()
+    # New PCs: number of PCs whose first-ever use by this user is on this day
+    pc_first = ev.groupby(["user", "pc"])["date"].min().reset_index()
+    new_pc = pc_first.groupby(["user", "date"]).size().reset_index(name="n_new_pc")
